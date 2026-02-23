@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>溫哥華 & 班夫 11日旅程規劃助手</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap');
+        
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #f3f4f6; /* Cool Gray 100 */
+        }
+
+        /* Custom Scrollbar for better UX within containers */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; 
+        }
+
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 100%;
+            height: 250px;
+            margin: 0 auto;
+        }
+
+        .timeline-line {
+            position: absolute;
+            left: 1.25rem;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background-color: #e5e7eb;
+            z-index: 0;
+        }
+        
+        .active-day-btn {
+            background-color: #0f766e; /* Teal 700 */
+            color: white;
+            border-color: #0f766e;
+        }
+        
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+    </style>
+    <!-- Chosen Palette: "Alpine & Ocean" - Using Tailwind's Teal (Nature), Slate (Urban), and Amber (Highlights) to reflect the mountain/city mix. -->
+    <!-- Application Structure Plan: 
+         1. Header: Trip Summary & Global Stats.
+         2. Navigation: Horizontal Day Selector for timeline navigation.
+         3. Main Stage:
+            - Left Column: Interactive Hourly Timeline for the selected day.
+            - Right Column: Dynamic Context Dashboard (Map Context substitute, Meals, Transport, Tips).
+         4. Bottom Section: "Trip Manager" containing Packing List, Budget Tips, and Transport Links.
+         Why: The user needs to manage time and logistics efficiently. A day-by-day toggle is cleaner than a long scroll. 
+         Separating "Logistics" from "Experience" helps mental load.
+    -->
+    <!-- Visualization & Content Choices:
+         - Chart.js Radar Chart: "Day Vibe" (Adventure vs Food vs Relax vs Culture) to show the balance of the day.
+         - Chart.js Bar Chart: Daily Energy/Activity Level estimation.
+         - Text/Cards: Used for specific itinerary steps to avoid SVG complexity.
+         - Interaction: Clicking days updates all panels. Checkboxes for packing. 
+         - Confirmation: NO SVG graphics used. NO Mermaid JS used.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+</head>
+<body class="text-slate-800 bg-slate-50 min-h-screen flex flex-col">
+
+    <!-- Header Section -->
+    <header class="bg-teal-800 text-white shadow-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 flex justify-between items-center flex-wrap">
+            <div>
+                <h1 class="text-2xl font-bold flex items-center gap-2">
+                    <span>🏔️</span> 溫哥華 & 班夫 11日旅程指南
+                </h1>
+                <p class="text-teal-200 text-sm mt-1">6月17日 - 6月27日 | 經濟型預算 | 戶外與美食</p>
+            </div>
+            <div class="flex gap-4 text-sm hidden sm:flex">
+                <div class="bg-teal-900/50 px-3 py-1 rounded-full border border-teal-700">
+                    <span class="block text-xs text-teal-300">目前城市</span>
+                    <span id="current-city-display" class="font-semibold">溫哥華</span>
+                </div>
+                <div class="bg-teal-900/50 px-3 py-1 rounded-full border border-teal-700">
+                    <span class="block text-xs text-teal-300">今日重點</span>
+                    <span id="day-focus-display" class="font-semibold">抵達 & 休息</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="flex-grow max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- Introduction Paragraph -->
+        <section class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-amber-500">
+            <h2 class="text-xl font-bold text-slate-800 mb-2">旅程總覽</h2>
+            <p class="text-slate-600 leading-relaxed">
+                歡迎使用您的專屬互動行程表。此應用程式將原本的長篇指南轉化為每日可視化的行動儀表板。
+                上方導航欄可切換不同旅行日，查看當日的詳細**按小時行程**、**餐飲推薦**以及**交通提示**。
+                右側儀表板會顯示當日的活動強度分析，幫助您調節體力。下方區域則整理了必備的打包清單與預算小撇步。
+                請點擊下方天數開始探索您的加拿大之旅！
+            </p>
+        </section>
+
+        <!-- Navigation: Day Selector -->
+        <nav class="overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
+            <div class="flex space-x-2 min-w-max" id="day-nav-container">
+                <!-- Buttons injected by JS -->
+            </div>
+        </nav>
+
+        <!-- Dynamic Day View -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- Left Column: Timeline -->
+            <div class="lg:col-span-2 bg-white rounded-xl shadow-sm overflow-hidden flex flex-col">
+                <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                    <h3 class="text-lg font-bold text-teal-900 flex items-center gap-2">
+                        <span>📅</span> <span id="timeline-title">第1天行程</span>
+                    </h3>
+                    <span class="text-sm bg-amber-100 text-amber-800 px-3 py-1 rounded-full font-medium" id="timeline-date">6/17</span>
+                </div>
+                <div class="p-6 relative flex-grow overflow-y-auto max-h-[800px]" id="timeline-content">
+                    <!-- Timeline items injected by JS -->
+                </div>
+            </div>
+
+            <!-- Right Column: Dashboard & Context -->
+            <div class="space-y-6">
+                
+                <!-- Day Vibe & Stats -->
+                <div class="bg-white rounded-xl shadow-sm p-6">
+                    <h3 class="text-lg font-bold text-slate-800 mb-4 border-b pb-2">今日活動分析</h3>
+                    <p class="text-sm text-slate-500 mb-4">此圖表顯示今日行程的體驗構成，幫助您了解當天是偏向戶外探險、城市文化還是放鬆美食。</p>
+                    
+                    <div class="chart-container">
+                        <canvas id="vibeChart"></canvas>
+                    </div>
+                    
+                    <div class="mt-4 grid grid-cols-2 gap-3 text-center">
+                        <div class="bg-slate-50 p-2 rounded">
+                            <div class="text-xs text-slate-500">預估步數</div>
+                            <div class="font-bold text-teal-600" id="step-count">3,000+</div>
+                        </div>
+                        <div class="bg-slate-50 p-2 rounded">
+                            <div class="text-xs text-slate-500">主要交通</div>
+                            <div class="font-bold text-teal-600" id="transport-mode">捷運</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Food Highlights -->
+                <div class="bg-white rounded-xl shadow-sm p-6 border-t-4 border-orange-400">
+                    <h3 class="text-lg font-bold text-slate-800 mb-3 flex items-center gap-2">
+                        <span>🍽️</span> 重點美食
+                    </h3>
+                    <div id="food-highlights" class="space-y-3">
+                        <!-- Food items injected by JS -->
+                    </div>
+                </div>
+
+                <!-- Specific Tips -->
+                <div class="bg-teal-50 rounded-xl shadow-sm p-6 border border-teal-100">
+                    <h3 class="text-lg font-bold text-teal-900 mb-3 flex items-center gap-2">
+                        <span>💡</span> 當日貼士
+                    </h3>
+                    <p class="text-sm text-teal-800 leading-relaxed" id="daily-tip">
+                        記得購買 Compass Card，這是在溫哥華搭乘大眾運輸的必備神卡。
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Logistics & Tools Section -->
+        <section class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-slate-200">
+            
+            <!-- Packing Checklist -->
+            <div class="bg-white rounded-xl shadow-sm p-6">
+                <h3 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                    <span>🎒</span> 智能打包清單 (6月)
+                </h3>
+                <p class="text-sm text-slate-500 mb-4">點擊勾選以追蹤您的準備進度。</p>
+                <div class="space-y-2 max-h-60 overflow-y-auto pr-2" id="packing-list">
+                    <!-- Checkboxes injected by JS -->
+                </div>
+            </div>
+
+            <!-- Transport & Links -->
+            <div class="bg-white rounded-xl shadow-sm p-6">
+                <h3 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                    <span>🔗</span> 交通預約與資源
+                </h3>
+                <p class="text-sm text-slate-500 mb-4">點擊下方按鈕前往官方預約頁面。</p>
+                <div class="grid grid-cols-1 gap-3">
+                    <a href="https://riderexpress.ca/" target="_blank" class="flex items-center justify-between p-3 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 transition group">
+                        <span class="font-medium text-slate-700">🚌 溫哥華-班夫長途巴士 (Rider Express)</span>
+                        <span class="text-slate-400 group-hover:text-teal-600">➜</span>
+                    </a>
+                    <a href="https://roamtransit.com/" target="_blank" class="flex items-center justify-between p-3 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 transition group">
+                        <span class="font-medium text-slate-700">🚍 班夫當地公車 (Roam Transit)</span>
+                        <span class="text-slate-400 group-hover:text-teal-600">➜</span>
+                    </a>
+                    <a href="https://reservation.pc.gc.ca/" target="_blank" class="flex items-center justify-between p-3 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 transition group">
+                        <span class="font-medium text-slate-700">🏞️ 國家公園接駁車 (Parks Canada)</span>
+                        <span class="text-slate-400 group-hover:text-teal-600">➜</span>
+                    </a>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-slate-800 text-slate-400 py-8 mt-12">
+        <div class="max-w-7xl mx-auto px-4 text-center">
+            <p class="text-sm">© 2024 Canvas Create Webapp | 溫哥華 & 班夫專屬行程</p>
+            <p class="text-xs mt-2">基於經濟型預算與中等精力水平定制</p>
+        </div>
+    </footer>
+
+    <!-- Application Logic -->
+    <script>
+        // --- DATA STORE ---
+        // Parsing the source report into structured data
+        const tripData = [
+            {
+                day: 1,
+                date: "6/17",
+                city: "溫哥華",
+                title: "抵達溫哥華",
+                focus: "安頓休息",
+                steps: [
+                    { time: "21:50", icon: "🛬", title: "抵達機場 (YVR)", desc: "辦理入境手續、提取行李。購買 Compass Card。" },
+                    { time: "23:30", icon: "🚆", title: "搭乘 Canada Line", desc: "前往列治文/本拿比住宿地點。車程約 20-30 分鐘。" },
+                    { time: "00:00", icon: "🛌", title: "辦理入住", desc: "若肚子餓可在附近的 7-11 或 24h 速食店解決。" }
+                ],
+                vibe: { nature: 1, city: 3, food: 2, relax: 4 }, // Scale 1-5
+                stats: { steps: "2,000", transport: "天車 (捷運)" },
+                food: [
+                    { name: "便利商店/速食", type: "宵夜", desc: "簡單解決，儲存體力。" }
+                ],
+                tip: "在機場捷運站購買 Compass Card 並儲值，這張卡未來幾天在溫哥華搭車都會用到。"
+            },
+            {
+                day: 2,
+                date: "6/18",
+                city: "溫哥華",
+                title: "經典地標與街頭小吃",
+                focus: "城市觀光",
+                steps: [
+                    { time: "09:30", icon: "☕", title: "國民早餐", desc: "Tim Hortons 體驗 Farmer's Wrap 和冰咖啡。" },
+                    { time: "11:00", icon: "🚲", title: "史丹利公園 (Stanley Park)", desc: "租自行車騎行海堤 (Seawall)，看獅門橋與圖騰柱。" },
+                    { time: "13:30", icon: "🌭", title: "午餐：Japadog", desc: "英吉利灣附近的日式熱狗，溫哥華必吃街頭美食。" },
+                    { time: "14:30", icon: "🏖️", title: "英吉利灣 (English Bay)", desc: "沙灘漫步，放鬆休息。" },
+                    { time: "16:30", icon: "🕰️", title: "煤氣鎮 (Gastown)", desc: "參觀蒸汽鐘，感受歷史氛圍。" },
+                    { time: "18:30", icon: "🍖", title: "晚餐：The Flying Pig", desc: "輕鬆氛圍，推薦手撕豬肉或青口。" }
+                ],
+                vibe: { nature: 4, city: 5, food: 4, relax: 3 },
+                stats: { steps: "15,000+", transport: "自行車/步行" },
+                food: [
+                    { name: "Japadog", type: "街頭小吃", desc: "日式風味熱狗，多汁肉腸。" },
+                    { name: "The Flying Pig", type: "晚餐", desc: "優質肉類與海鮮，價位適中。" }
+                ],
+                tip: "史丹利公園騎車請注意自行車道方向，不要騎到人行道上。"
+            },
+            {
+                day: 3,
+                date: "6/19",
+                city: "溫哥華",
+                title: "固蘭湖島與海灘",
+                focus: "美食與放鬆",
+                steps: [
+                    { time: "09:30", icon: "🛥️", title: "前往固蘭湖島", desc: "搭乘 Aquabus 小渡輪或公車。" },
+                    { time: "10:00", icon: "🛍️", title: "公眾市場 (Public Market)", desc: "探索美食攤位、原住民藝術品。" },
+                    { time: "12:30", icon: "🐟", title: "午餐：Go Fish", desc: "碼頭邊的炸魚薯條，或是市場內生蠔與熟食。" },
+                    { time: "14:30", icon: "🌊", title: "基斯蘭奴海灘 (Kitsilano)", desc: "欣賞北岸山脈景色，純放鬆行程。" },
+                    { time: "18:00", icon: "🍣", title: "晚餐：Miku 或 Steveston Pizza", desc: "選擇炙燒壽司或列治文的浮誇海鮮披薩。" }
+                ],
+                vibe: { nature: 3, city: 4, food: 5, relax: 5 },
+                stats: { steps: "10,000", transport: "渡輪/公車" },
+                food: [
+                    { name: "Go Fish", type: "午餐", desc: "新鮮炸魚薯條，排隊名店。" },
+                    { name: "Steveston Pizza Co.", type: "晚餐", desc: "滿滿蝦子與海鮮的披薩 (若住列治文)。" }
+                ],
+                tip: "固蘭湖島午餐時間人潮眾多，建議買了食物到戶外看著海鷗(小心搶食)吃。"
+            },
+            {
+                day: 4,
+                date: "6/20",
+                city: "移動日",
+                title: "前進洛磯山脈",
+                focus: "長途移動",
+                steps: [
+                    { time: "08:00", icon: "🚗", title: "出發", desc: "租車自駕或搭乘 Rider Express 巴士。沿一號公路東行。" },
+                    { time: "12:30", icon: "🍔", title: "午餐休整", desc: "甘露市 (Kamloops) 或灰熊鎮 (Revelstoke)。" },
+                    { time: "13:30", icon: "🏔️", title: "穿越國家公園", desc: "途經冰川國家公園與幽鶴國家公園，風景壯麗。" },
+                    { time: "18:30", icon: "🏨", title: "抵達班夫/坎莫爾", desc: "辦理入住，適應海拔。" },
+                    { time: "19:30", icon: "🦌", title: "晚餐：Elk & Oarsman", desc: "品嚐麋鹿肉漢堡，感受山野風味。" }
+                ],
+                vibe: { nature: 5, city: 1, food: 3, relax: 2 },
+                stats: { steps: "3,000", transport: "汽車/巴士 (10hr)" },
+                food: [
+                    { name: "Elk & Oarsman", type: "晚餐", desc: "特色野味料理，裝潢粗獷。" }
+                ],
+                tip: "今日車程較長，建議準備頸枕和足夠的零食與水。自駕者注意山路速限。"
+            },
+            {
+                day: 5,
+                date: "6/21",
+                city: "班夫",
+                title: "雙湖巡禮",
+                focus: "視覺震撼",
+                steps: [
+                    { time: "07:30", icon: "🚌", title: "搭乘接駁車", desc: "從停車場搭乘 Parks Canada 接駁車前往露易絲湖。" },
+                    { time: "08:30", icon: "💎", title: "露易絲湖 (Lake Louise)", desc: "湖畔散步，或挑戰 Fairview Lookout 步道。" },
+                    { time: "11:00", icon: "🔄", title: "轉乘至夢蓮湖", desc: "搭乘連接巴士 (Connector)。" },
+                    { time: "11:30", icon: "🗻", title: "夢蓮湖 (Moraine Lake)", desc: "必爬碎石堆 (Rockpile) 拍攝經典十峰山倒影。" },
+                    { time: "14:00", icon: "🥪", title: "湖畔野餐", desc: "自備三明治午餐 (景區餐廳極貴且人多)。" },
+                    { time: "18:30", icon: "🌮", title: "晚餐：Magpie & Stump", desc: "平價墨西哥塔可餅，肉量豐富。" }
+                ],
+                vibe: { nature: 5, city: 1, food: 2, relax: 3 },
+                stats: { steps: "12,000", transport: "官方接駁車" },
+                food: [
+                    { name: "自備野餐", type: "午餐", desc: "省錢首選，享受湖景無價。" },
+                    { name: "Magpie & Stump", type: "晚餐", desc: "熱鬧的墨西哥餐廳，Tacos 好吃。" }
+                ],
+                tip: "🌟 絕對重點：接駁車必須提前預約。夢蓮湖禁止私家車進入。"
+            },
+            {
+                day: 6,
+                date: "6/22",
+                city: "班夫",
+                title: "峽谷與溫泉",
+                focus: "健行與療癒",
+                steps: [
+                    { time: "09:00", icon: "🌲", title: "前往強斯頓峽谷", desc: "自駕或搭乘 Roam Route 9。" },
+                    { time: "10:00", icon: "🥾", title: "峽谷健行", desc: "下瀑布輕鬆，上瀑布風景更佳 (來回 5km)。" },
+                    { time: "14:00", icon: "🍟", title: "午餐：Banff Poutine", desc: "加拿大國民美食：肉汁乳酪薯條，加肉版！" },
+                    { time: "15:30", icon: "🏛️", title: "洞穴與盆地遺址", desc: "了解班夫歷史與溫泉起源。" },
+                    { time: "17:30", icon: "♨️", title: "班夫上溫泉", desc: "泡湯放鬆肌肉 (門票約 $16)。" }
+                ],
+                vibe: { nature: 5, city: 2, food: 3, relax: 4 },
+                stats: { steps: "15,000", transport: "公車/步行" },
+                food: [
+                    { name: "Banff Poutine", type: "小吃", desc: "高熱量街頭美食，補充健行消耗。" }
+                ],
+                tip: "去溫泉記得自備泳衣和毛巾，現場租借需要額外費用。"
+            },
+            {
+                day: 7,
+                date: "6/23",
+                city: "班夫",
+                title: "文化與冰原 (可選)",
+                focus: "彈性探索",
+                steps: [
+                    { time: "09:30", icon: "🌊", title: "弓瀑布 & 驚奇角", desc: "瑪麗蓮夢露電影取景地，眺望班夫溫泉城堡酒店。" },
+                    { time: "11:00", icon: "🖼️", title: "懷特博物館", desc: "深入了解洛磯山脈歷史 (文化興趣)。" },
+                    { time: "15:00", icon: "🦆", title: "朱砂湖 (Vermilion Lakes)", desc: "湖畔散步，觀察野生動物的好地方。" },
+                    { time: "18:30", icon: "🍝", title: "晚餐：Meatball Pizza", desc: "份量大的肉丸義大利麵。" }
+                ],
+                vibe: { nature: 4, city: 3, food: 3, relax: 4 },
+                stats: { steps: "8,000", transport: "步行/公車" },
+                food: [
+                    { name: "The Meatball Pizza", type: "晚餐", desc: "碳水與蛋白質炸彈，適合大胃王。" }
+                ],
+                tip: "如果選擇參加冰原大道一日遊，今天整天都會在巴士上，請忽略上述行程。"
+            },
+            {
+                day: 8,
+                date: "6/24",
+                city: "移動日",
+                title: "告別洛磯山脈",
+                focus: "返程與採購",
+                steps: [
+                    { time: "08:30", icon: "🍁", title: "紀念品採購", desc: "購買楓糖漿、紀念品。外帶咖啡。" },
+                    { time: "09:30", icon: "🚌", title: "啟程返回溫哥華", desc: "沿原路返回。自駕者可順路停翡翠湖 (Emerald Lake)。" },
+                    { time: "15:30", icon: "🛣️", title: "繼續車程", desc: "沿途小鎮午餐。" },
+                    { time: "20:30", icon: "🍜", title: "抵達溫哥華晚餐", desc: "列治文港式燒臘或日式居酒屋，撫慰旅途疲勞。" }
+                ],
+                vibe: { nature: 3, city: 2, food: 4, relax: 2 },
+                stats: { steps: "4,000", transport: "汽車/巴士 (10hr)" },
+                food: [
+                    { name: "列治文亞餐", type: "晚餐", desc: "回到亞洲美食天堂，選擇多樣。" }
+                ],
+                tip: "返回溫哥華時通常會比去程快一點 (下坡多)，但仍需預留充足時間。"
+            },
+            {
+                day: 9,
+                date: "6/25",
+                city: "北溫哥華",
+                title: "免費吊橋秘境",
+                focus: "雨林探險",
+                steps: [
+                    { time: "09:30", icon: "⛴️", title: "搭乘 SeaBus", desc: "海上巴士跨海前往北溫哥華，欣賞海景。" },
+                    { time: "10:30", icon: "🌉", title: "林恩峽谷公園", desc: "體驗免費懸索橋，溫帶雨林健行。" },
+                    { time: "13:30", icon: "🥣", title: "午餐：Lonsdale Quay", desc: "公眾市場內的海鮮湯與平價攤位。" },
+                    { time: "15:00", icon: "☕", title: "碼頭自由活動", desc: "喝咖啡看海，或回住宿午休。" },
+                    { time: "18:00", icon: "🥩", title: "晚餐：韓式烤肉", desc: "市區或 Lougheed 附近的韓式料理。" }
+                ],
+                vibe: { nature: 5, city: 2, food: 3, relax: 4 },
+                stats: { steps: "12,000", transport: "船/公車" },
+                food: [
+                    { name: "Lonsdale Quay Market", type: "午餐", desc: "海鮮濃湯是必點。" },
+                    { name: "韓式烤肉", type: "晚餐", desc: "滿足對肉類的渴望。" }
+                ],
+                tip: "林恩峽谷比卡皮拉諾吊橋更原始且免費，但人也不少，建議上午前往。"
+            },
+            {
+                day: 10,
+                date: "6/26",
+                city: "溫哥華",
+                title: "文化尋根與夜市",
+                focus: "文化與狂歡",
+                steps: [
+                    { time: "10:00", icon: "🗿", title: "UBC 人類學博物館", desc: "或伊莉莎白王后公園。欣賞原住民圖騰與花園。" },
+                    { time: "13:00", icon: "🥗", title: "午餐：輕食", desc: "校園或公園附近。" },
+                    { time: "14:30", icon: "🧳", title: "打包行李", desc: "整理戰利品，最後休息。" },
+                    { time: "18:30", icon: "🏮", title: "列治文夜市", desc: "北美最大夜市 (僅週末)。烤魷魚、旋風土豆、肉串。" }
+                ],
+                vibe: { nature: 2, city: 4, food: 5, relax: 3 },
+                stats: { steps: "8,000", transport: "捷運/步行" },
+                food: [
+                    { name: "列治文夜市", type: "晚餐", desc: "狂掃街頭小吃：烤魷魚、章魚燒。" }
+                ],
+                tip: "列治文夜市入場需要門票，建議準備現金 (Cash is King)。"
+            },
+            {
+                day: 11,
+                date: "6/27",
+                city: "溫哥華",
+                title: "滿載而歸",
+                focus: "購物與離境",
+                steps: [
+                    { time: "09:00", icon: "🛍️", title: "最後採購", desc: "Robson St 或機場 Outlet。" },
+                    { time: "11:00", icon: "✈️", title: "前往機場", desc: "搭乘 Canada Line 抵達 YVR。" },
+                    { time: "End", icon: "👋", title: "旅程結束", desc: "帶著美好的回憶回家！" }
+                ],
+                vibe: { nature: 1, city: 4, food: 2, relax: 2 },
+                stats: { steps: "5,000", transport: "捷運/飛機" },
+                food: [],
+                tip: "機場 Outlet 離機場非常近，搭捷運只需兩站，適合最後衝刺。"
+            }
+        ];
+
+        const packingItems = [
+            "防風防水夾克 (洛磯山脈必備)",
+            "舒適防水健行鞋",
+            "洋蔥式穿搭衣物 (短袖+長袖+外套)",
+            "太陽眼鏡 & 帽子",
+            "高係數防曬乳",
+            "泳衣 (班夫溫泉用)",
+            "個人藥品 & 暈車藥",
+            "牙刷牙膏 (環保旅宿可能不提供)",
+            "空水瓶 (可生飲自來水)",
+            "Compass Card (抵達購買)",
+            "防熊噴霧 (當地買，不能帶上飛機)"
+        ];
+
+        // --- STATE MANAGEMENT ---
+        let activeDay = 1;
+        let vibeChartInstance = null;
+
+        // --- DOM ELEMENTS ---
+        const dayNavContainer = document.getElementById('day-nav-container');
+        const timelineContent = document.getElementById('timeline-content');
+        const timelineTitle = document.getElementById('timeline-title');
+        const timelineDate = document.getElementById('timeline-date');
+        const currentCityDisplay = document.getElementById('current-city-display');
+        const dayFocusDisplay = document.getElementById('day-focus-display');
+        const foodHighlights = document.getElementById('food-highlights');
+        const dailyTip = document.getElementById('daily-tip');
+        const stepCount = document.getElementById('step-count');
+        const transportMode = document.getElementById('transport-mode');
+        const packingListContainer = document.getElementById('packing-list');
+
+        // --- INITIALIZATION ---
+        function init() {
+            renderDayNav();
+            renderPackingList();
+            loadDay(1); // Load Day 1 by default
+        }
+
+        // --- RENDER FUNCTIONS ---
+
+        // 1. Render Day Navigation Buttons
+        function renderDayNav() {
+            dayNavContainer.innerHTML = '';
+            tripData.forEach(day => {
+                const btn = document.createElement('button');
+                btn.className = `px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors duration-200 border ${activeDay === day.day ? 'active-day-btn' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`;
+                btn.textContent = `Day ${day.day} (${day.date})`;
+                btn.onclick = () => loadDay(day.day);
+                dayNavContainer.appendChild(btn);
+            });
+        }
+
+        // 2. Render Packing List
+        function renderPackingList() {
+            packingListContainer.innerHTML = '';
+            packingItems.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = 'flex items-center gap-3 p-2 hover:bg-slate-50 rounded transition';
+                div.innerHTML = `
+                    <input type="checkbox" id="pack-${index}" class="w-4 h-4 text-teal-600 rounded border-slate-300 focus:ring-teal-500 cursor-pointer">
+                    <label for="pack-${index}" class="text-slate-700 text-sm cursor-pointer select-none">${item}</label>
+                `;
+                packingListContainer.appendChild(div);
+            });
+        }
+
+        // 3. Main Load Function for a specific Day
+        function loadDay(dayIndex) {
+            activeDay = dayIndex;
+            const data = tripData.find(d => d.day === dayIndex);
+            
+            // Update UI Texts
+            timelineTitle.innerHTML = `<span>📅</span> 第${data.day}天：${data.title}`;
+            timelineDate.textContent = data.date;
+            currentCityDisplay.textContent = data.city;
+            dayFocusDisplay.textContent = data.focus;
+            dailyTip.textContent = data.tip;
+            stepCount.textContent = data.stats.steps;
+            transportMode.textContent = data.stats.transport;
+
+            // Update Nav Styling
+            renderDayNav();
+
+            // Render Timeline
+            renderTimeline(data.steps);
+
+            // Render Food
+            renderFood(data.food);
+
+            // Update Chart
+            updateVibeChart(data.vibe);
+        }
+
+        function renderTimeline(steps) {
+            timelineContent.innerHTML = '<div class="timeline-line"></div>'; // Reset and add line
+            
+            steps.forEach((step, index) => {
+                const item = document.createElement('div');
+                item.className = 'relative z-10 mb-8 pl-8 group';
+                item.innerHTML = `
+                    <div class="absolute left-2 top-0 w-8 h-8 -ml-4 flex items-center justify-center rounded-full bg-white border-2 border-teal-500 text-lg shadow-sm group-hover:scale-110 transition-transform">
+                        ${step.icon}
+                    </div>
+                    <div class="bg-white p-4 rounded-lg border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+                        <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-1">
+                            <h4 class="font-bold text-slate-800">${step.title}</h4>
+                            <span class="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-1 rounded w-fit mt-1 sm:mt-0">${step.time}</span>
+                        </div>
+                        <p class="text-sm text-slate-600">${step.desc}</p>
+                    </div>
+                `;
+                timelineContent.appendChild(item);
+            });
+        }
+
+        function renderFood(foods) {
+            foodHighlights.innerHTML = '';
+            if (foods.length === 0) {
+                foodHighlights.innerHTML = '<p class="text-sm text-slate-400 italic">今日無特定推薦，可自由探索。</p>';
+                return;
+            }
+            foods.forEach(food => {
+                const item = document.createElement('div');
+                item.className = 'flex items-start gap-3 p-3 bg-orange-50 rounded-lg border border-orange-100';
+                item.innerHTML = `
+                    <div class="mt-1 text-orange-500">🍴</div>
+                    <div>
+                        <div class="font-bold text-slate-800 text-sm">${food.name} <span class="text-xs font-normal text-orange-600 ml-1">(${food.type})</span></div>
+                        <p class="text-xs text-slate-600 mt-1">${food.desc}</p>
+                    </div>
+                `;
+                foodHighlights.appendChild(item);
+            });
+        }
+
+        // 4. Chart.js Visualization
+        function updateVibeChart(vibeData) {
+            const ctx = document.getElementById('vibeChart').getContext('2d');
+            
+            const dataValues = [vibeData.nature, vibeData.city, vibeData.food, vibeData.relax];
+            
+            if (vibeChartInstance) {
+                vibeChartInstance.data.datasets[0].data = dataValues;
+                vibeChartInstance.update();
+            } else {
+                vibeChartInstance = new Chart(ctx, {
+                    type: 'radar',
+                    data: {
+                        labels: ['戶外/自然', '城市/文化', '美食/小吃', '放鬆/休閒'],
+                        datasets: [{
+                            label: '體驗強度',
+                            data: dataValues,
+                            backgroundColor: 'rgba(20, 184, 166, 0.2)', // Teal 500
+                            borderColor: 'rgba(13, 148, 136, 1)', // Teal 600
+                            pointBackgroundColor: 'rgba(245, 158, 11, 1)', // Amber 500
+                            borderWidth: 2,
+                            pointRadius: 3
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            r: {
+                                min: 0,
+                                max: 5,
+                                ticks: {
+                                    stepSize: 1,
+                                    display: false 
+                                },
+                                pointLabels: {
+                                    font: {
+                                        size: 12,
+                                        family: "'Noto Sans TC', sans-serif"
+                                    },
+                                    color: '#475569'
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        // Initialize App
+        init();
+
+    </script>
+</body>
+</html>
